@@ -1,0 +1,65 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Stars
+{
+    class Macros
+    {
+            public static void NewMacro()
+            {
+                Document document = TFlex.Application.ActiveDocument;
+
+                if (document.Selection.GetSize() == 3)
+                {
+                    Node3D nd1 = document.Selection.GetAt(0) as Node3D;
+                    Node3D nd2 = document.Selection.GetAt(1) as Node3D;
+                    Node3D nd3 = document.Selection.GetAt(2) as Node3D;
+
+                    if (nd1 == null || nd2 == null || nd3 == null)
+                    {
+                        MessageBox.Show("Не выбрано три узла.");
+                        return;
+                    }
+
+                    document.BeginChanges("1");
+
+                    Page pg = new Page(document, PageType.Workplane);
+                    pg.Name = "ТриТочки";
+
+                    OnPointsWorkplane pwp = new OnPointsWorkplane(document);
+                    pwp.FirstPointOnWorkplane = nd1.Geometry.Point;
+                    pwp.SecondPointOnWorkplane = nd2.Geometry.Point;
+                    pwp.ThirdPointOnWorkplane = nd3.Geometry.Point;
+                    pwp.Page = pg;
+
+                    FreeNode nB = new FreeNode(document, 0, 0);
+                    //         nB.Page = pwp.Page;
+                    nB.Page = pg;
+
+                    ProjectionNode nd2p = new ProjectionNode(document, pwp, nd2);
+                    ProjectionNode nd3p = new ProjectionNode(document, pwp, nd3);
+
+                    CircleConstruction cr = new CircleConstruction(document);
+                    cr.SetThreeNodes(nB, nd2p, nd3p);
+                    cr.Page = pg;
+
+                    ConstructionOutline gr = new ConstructionOutline(document, cr);
+                    gr.Page = pg;
+                    gr.Color = 12;
+
+                    SketchProfile skProfileDiaf = new SketchProfile(document);
+                    skProfileDiaf.Color = 12;
+                    skProfileDiaf.WorkSurface = pwp;
+
+                    document.Selection.DeselectAll();
+
+                    document.EndChanges();
+
+                    return;
+                }
+            }
+    }
+}

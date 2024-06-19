@@ -1,0 +1,274 @@
+using System;
+using System.Windows.Forms;
+using System.IO;
+using System.Xml.Serialization;
+using System.Reflection;
+
+using TFlex;
+using TFlex.Model;
+using TFlex.Model.Model2D;
+using TFlex.Command;
+using TFlex.Drawing;
+using System.Collections.Generic;
+
+//Данный файл реализует функциональность приложения.
+//Регистрируются команды приложения, иконки команд, пункты меню, панель с кнопками,
+//плавающее окно, обработчики событий от документов.
+
+namespace CircleByEdge
+{
+    /// <summary>
+	/// Для создания приложения необходимо иметь класс, порождённый от PluginFactory
+	/// </summary>
+	public class Factory : PluginFactory
+    {
+        /// <summary>
+        /// Необходимо также переопределить данный метод для создания объекта
+        /// </summary>
+		public override Plugin CreateInstance()
+        {
+            return new CircleByEdgePlugin(this);
+        }
+
+        /// <summary>
+		/// Уникальный GUID приложения. Он должен быть обязательно разным у разных приложений
+		/// </summary>
+        public override Guid ID
+        {
+            get
+            {
+                return new Guid("{32F0C0D7-F516-4b69-837F-F225765981EF}");
+            }
+        }
+
+        /// <summary>
+		/// Имя приложения
+		/// </summary>
+		public override string Name
+        {
+            get
+            {
+                return "T-FLEX CircleByEdgePlugin";
+            }
+        }
+    };
+
+    /// <summary>
+	/// Команды приложения в панели и главном меню
+	/// </summary>
+	enum Commands
+    {
+        Create = 1, //Команда создания звезды
+        ShowWindow, //Показать/спрятать плавающее окно
+        SplineCreate = 7,
+    };
+
+    /// <summary>
+    /// Команды объектов в контекстном меню
+    /// </summary>
+    enum ObjectCommands
+    {
+        Fill = Commands.ShowWindow + 1,
+    };
+
+    /// <summary>
+    /// Команды автоменю
+    /// </summary>
+    enum AutomenuCommands
+    {
+        Number,
+        Fill = Number + 8,
+    };
+
+    /// <summary>
+    /// ID иконок объектов, генерируемых приложением
+    /// </summary>
+    enum ObjectTypeIcons
+    {
+        StarObject
+    };
+
+    /// <summary>
+    /// Класс приложения. Регистрируем команды, обработчики событий.
+    /// Обрабатываем события, приходящие от различных меню.
+    /// </summary>
+    public class CircleByEdgePlugin : Plugin
+    {
+        /// <summary>
+        /// флаг удаления 1го из цепочки объектов,
+        /// нужен для своевременного вызова BeginInvoke()
+        /// </summary>
+        private bool firstObjectDeleted;
+
+        /// <summary>
+        /// Конструктор
+        /// </summary>
+        /// <param name="factory"></param>
+        public CircleByEdgePlugin(Factory factory) : base(factory)
+        {
+            firstObjectDeleted = false;
+        }
+
+
+        /// <summary>
+        /// Загрузка иконок
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        System.Drawing.Icon LoadIconResource(string name)
+        {
+            System.IO.Stream stream = GetType().Assembly.
+                GetManifestResourceStream("CircleByEdge.Resource_Files." + name + ".ico");
+            return new System.Drawing.Icon(stream);
+        }
+
+        /// <summary>
+        ///Данная инициализация вызывается в момент загрузки приложения.
+        ///В данном приложении здесь ничего делать не нужно. Вся инициализация делается в OnCreateTools
+        /// </summary>
+        protected override void OnInitialize()
+        {
+            base.OnInitialize();
+
+            //Регистрируем иконки для кнопок в автоменю
+            for (int i = 0; i < 8; ++i)
+            {
+                // Это для выбора количества лучей через автоменю
+                String hint = String.Format(i < 2 ? "{0} луча" : "{0} лучей", i + 3);
+                int cmdID = (int)AutomenuCommands.Number + i;
+                RegisterAutomenuCommand(cmdID, hint, LoadIconResource("Fill"));
+            }
+
+            RegisterAutomenuCommand((int)AutomenuCommands.Fill, "Заливка", LoadIconResource("Fill"));
+        }
+
+        /// <summary>
+        /// Этот метод вызывается в тот момент, когда следует зарегистрировать команды,
+        /// Создать панель, вставить пункты меню
+        /// </summary>
+        protected override void OnCreateTools()
+        {
+            base.OnCreateTools();
+
+            //RegisterCommand((int)Commands.Create, "Создание звёзд", LoadIconResource("CreateStars"), LoadIconResource("CreateStars")); // Регистрируем команду создания
+            //RegisterCommand((int)Commands.ShowWindow, "Показать окно", LoadIconResource("StarsWindow"), LoadIconResource("StarsWindow")); // Регистрируем команду показа окна
+            RegisterCommand((int)Commands.SplineCreate, "Создать окружность из кривой", LoadIconResource("CreateStars"), LoadIconResource("CreateStars")); // Регистрируем команду создания
+
+            //Регистрируем команды контекстного меню объекта звезды
+            //RegisterObjectCommand((int)ObjectCommands.Fill, "Заливка", LoadIconResource("Fill"), LoadIconResource("Fill")); // Регистрируем команду заливки для контекстного меню
+
+            //Регистрируем иконку звезды
+            //RegisterObjectTypeIcon((int)ObjectTypeIcons.StarObject, LoadIconResource("StarObject"));
+
+            //Добавляем пункты и подпункты меню
+
+            /*
+            TFlex.Menu submenu = new TFlex.Menu();
+            submenu.CreatePopup();
+            submenu.Append((int)Commands.Create, "&Создать", this);
+            submenu.Append((int)Commands.ShowWindow, "&Показать окно", this);
+            TFlex.Application.ActiveMainWindow.InsertPluginSubMenu("Звёзды", submenu, MainWindow.InsertMenuPosition.PluginSamples, this);
+            */
+
+            //Создаём панель с кнопками "Звёзды"
+            int[] cmdIDs = new int[] { (int)Commands.SplineCreate };
+            CreateToolbar("Модуль сплайн-окружность", cmdIDs);
+            CreateMainBarPanel("Модуль сплайн-окружность", cmdIDs, this.ID, true);
+
+            //Добавляем кнопки во вкладку "Приложения" в ленте
+            TFlex.RibbonGroup ribbonGroup = TFlex.RibbonBar.ApplicationsTab.AddGroup("Модуль сплайн-окружность");
+            ribbonGroup.AddButton((int)Commands.SplineCreate, this);
+            //ribbonGroup.AddButton((int)Commands.Create, this);
+            //ribbonGroup.AddButton((int)Commands.ShowWindow, this);
+
+
+            
+
+            //На случай если плагин был подключён, когда документ был уже создан и открыт (все места для AttachPlugin() пропущены),
+            //просто подключаем плагин к текущему документу
+            if (TFlex.Application.ActiveDocument != null)
+                TFlex.Application.ActiveDocument.AttachPlugin(this);
+        }
+
+        /// <summary>
+        /// Обработка команд от панели и главного меню
+        /// </summary>
+        /// <param name="document"></param>
+        /// <param name="id"></param>
+        protected override void OnCommand(Document document, int id)
+        {
+            var dict = new Dictionary<Commands, Action>();
+
+            Commands cmd = (Commands)id;
+
+            dict.Add(Commands.SplineCreate, delegate
+            {
+                Console.WriteLine("SplineCommand");
+                CreateSplineCommand command = new CreateSplineCommand(this, document);
+                command.Run(document.ActiveView);
+            }
+            );
+
+
+            if (dict.ContainsKey((Commands)id))
+            {
+                Action func = dict[cmd];
+                func.Invoke();
+            }
+            else {
+                base.OnCommand(document, id);
+            }
+        }
+
+        /// <summary>
+        /// Здесь можно блокировать команды и устанавливать галочки
+        /// </summary>
+        /// <param name="cmdUI"></param>
+        protected override void OnUpdateCommand(CommandUI cmdUI)
+        {
+            if (cmdUI == null)
+                return;
+
+            if (cmdUI.Document == null)
+            {
+                cmdUI.Enable(false);
+                return;
+            }
+
+            cmdUI.Enable();
+        }
+
+        /// <summary>
+		/// Подписываемся на обработку событий при создании нового документа
+		/// </summary>
+		/// <param name="args"></param>
+        protected override void NewDocumentCreatedEventHandler(DocumentEventArgs args)
+        {
+            //AttachPlugin нужно вызвать обязательно, иначе от данного документа не будут приходить уведомления о событиях
+            args.Document.AttachPlugin(this);
+        }
+
+
+        //Методы для экспорта/импорта
+        //-------------------------------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Это событие вызывается при показе диалоге экспорта текущего документа
+        /// </summary>
+        /// <param name="args"></param>
+        protected override void ShowingExportDialogEventHandler(ShowingImportExportDialogEventArgs args)
+        {
+            args.AddFilter("Файлы звёзд (*.str)|*.str|", 1);
+        }
+
+        /// <summary>
+        /// Это событие вызывается при показе диалоге импорта текущего документа
+        /// </summary>
+        /// <param name="args"></param>
+        protected override void ShowingImportDialogEventHandler(ShowingImportExportDialogEventArgs args)
+        {
+            args.AddFilter("Файлы звёзд (*.str)|*.str|", 1);
+        }
+
+    }
+}

@@ -1,0 +1,209 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using TFlex;
+using TFlex.Command;
+using TFlex.Model;
+using TFlex.Model.Model2D;
+using TFlex.Model.Model3D;
+using TFlex.Model.Model3D.Geometry;
+
+namespace CircleByEdge
+{
+    class CreateSplineCommandGeneral : PluginCommand
+    {
+        private bool _canSelect = false;
+        /// <summary>
+        /// Конструктор. Регистрируются обработчики событий
+        /// </summary>
+        /// <param name="App"></param>
+        public CreateSplineCommandGeneral(Plugin App) : base(App)
+        {
+            //Нажата кнопка на клавиатуре или в автоменю
+            this.KeyPressed += new TFlex.Command.KeyEventHandler(Command_KeyPressed);
+
+            //Перемещение мыши
+            this.ShowCursor += new TFlex.Command.MouseEventHandler(Command_ShowCursor);
+
+            //Выход из команды - вызывается после Terminate
+            this.Exit += new ExitEventHandler(Command_Exit);
+
+            //Выбор объекта
+            this.Select += new SelectEventHandler(CreateCommand_Select);
+        }
+
+        /// <summary>
+        /// храним документ, для которого вызвана команда
+        /// </summary>
+        protected Document _document;
+
+        /// <summary>
+        /// Для внутреннего использования.
+        /// </summary>
+        /// <remarks>
+        /// Обработчик события выхода из команды, вызывается после Terminate.
+        /// </remarks>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        protected virtual void Command_Exit(object sender, ExitEventArgs e) { }
+
+        /// <summary>
+        /// Для внутреннего использования.
+        /// </summary>
+        /// <remarks>
+        /// Обработчик нажатия кнопки клавиатуры или мыши.
+        /// </remarks>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        protected void Command_KeyPressed(object sender, TFlex.Command.KeyEventArgs e) {
+            var dict = new Dictionary<KeyCode, Action>();
+
+            KeyCode keyCode = e.Code;
+
+            Action lmb_delegate = delegate {
+                var selectedCircle = e.SelectedObject as TopolReference;
+                if (selectedCircle != null && this._canSelect) {
+                    ModelTopol edgeTopol = selectedCircle.Topol;
+
+                    ModelEdge modelEdge = edgeTopol as ModelEdge;
+
+                    /*
+                    не знаю зачем я это написал, но это работает 
+                    */
+
+                    if (modelEdge != null) {
+                        ModelEdge.GeometryData edgeInfo = modelEdge.Geometry;
+                        if (edgeInfo != null) {
+
+                            var points = modelEdge.GetPolyline();
+
+                            List<int> indexes = new List<int>();
+                            List<string> points_name = new List<string>();
+
+                            indexes.Add(0);
+                            indexes.Add(points.Length / 3);
+                            indexes.Add(2 * points.Length / 3);
+
+                            _document.BeginChanges("Рабочая плоскость по трем точкам");//Открытие блока изменений документа
+                            int i = 0;
+                            foreach (var point_pl in points)
+                            {
+                                if (indexes.Contains(i++))
+                                {
+                                    GeometryNode3D r = new GeometryNode3D(_document);
+                                    r.X = point_pl.X * 1000; // почему на 1000 умножаю - получаю метры потому что.
+                                    r.Y = point_pl.Y * 1000;
+                                    r.Z = point_pl.Z * 1000;
+                                    r.SetUniqueName("plugin_");
+                                    points_name.Add(r.Name);
+                                }
+                               
+                            }
+
+                            OnPointsWorkplane workplane = new OnPointsWorkplane(_document); //создаем объект
+                            workplane.SetUniqueName("Вспомогательная_поверхность_модуля_построения_сплайна");
+
+                            //построение плоскости A по 3 точкам
+                            workplane.FirstPointOnWorkplane = (_document.GetObjectByName(points_name[0]) as Node3D).Geometry.Point;
+                            workplane.SecondPointOnWorkplane = (_document.GetObjectByName(points_name[1]) as Node3D).Geometry.Point;
+                            workplane.ThirdPointOnWorkplane = (_document.GetObjectByName(points_name[2]) as Node3D).Geometry.Point;
+
+
+                            Page pg = new Page(_document, PageType.Workplane);
+                            //pg.Name = "ТриТочки";
+
+                            workplane.Page = pg;
+
+                            FreeNode nB = new FreeNode(_document, 0, 0);
+                            nB.Page = pg;
+
+                            ProjectionNode nd2p = new ProjectionNode(_document, workplane, (_document.GetObjectByName(points_name[1]) as Node3D));
+                            ProjectionNode nd3p = new ProjectionNode(_document, workplane, (_document.GetObjectByName(points_name[2]) as Node3D));
+
+                            CircleConstruction cr = new CircleConstruction(_document);
+                            cr.SetThreeNodes(nB, nd2p, nd3p);
+                            cr.Page = pg;
+
+                            ConstructionOutline gr = new ConstructionOutline(_document, cr);
+                            gr.Page = pg;
+                            gr.Color = 12;
+
+                            SketchProfile skProfileDiaf = new SketchProfile(_document);
+                            skProfileDiaf.Color = 12;
+                            skProfileDiaf.WorkSurface = workplane;
+
+
+                            
+                            workplane.VisibleInScene = false;
+
+                            //_document.DeleteObjects(new ObjectArray { _document.GetObjectByName(workplane.Name) }, new DeleteOptions(true));
+
+                            _document.EndChanges();//Закрытие блока изменений документа
+
+                            _document.BeginChanges("Удаление ребра");
+                            _document.DeleteObjects(new ObjectArray { _document.GetObjectByName(modelEdge.Name) }, new DeleteOptions(true));
+                            _document.EndChanges();
+
+                            
+                        }
+                    }
+
+                    //MessageBox.Show(found is );
+                    
+
+
+                }
+                SetCanSelecting(false);
+
+                
+
+                Terminate();
+            };
+
+            dict.Add(KeyCode.LMB, lmb_delegate);
+            dict.Add(KeyCode.keyENTER, lmb_delegate);
+
+
+            if (dict.ContainsKey(keyCode))
+            {
+                Action func = dict[keyCode];
+                func.Invoke();
+            }
+            else
+            {
+                // default
+            }
+        }
+
+        /// <summary>
+        /// Для внутреннего использования.
+        /// </summary>
+        /// <remarks>
+        /// Метод рисует динамический курсор звезды - рассчитывает её параметры и делегирует отрисовку в StarObject.Draw(graphics)
+        /// </remarks>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        protected void Command_ShowCursor(object sender, TFlex.Command.MouseEventArgs e) { }
+
+        /// <summary>
+        /// Обработчик события выделения объекта - нужен для привязки звезды к узлу
+        /// </summary>
+        /// <remarks>
+        /// Привязка к объектам также может задаваться с помощью настройки панели селектора 
+        /// </remarks>
+        private void CreateCommand_Select(object sender, SelectEventArgs e) { }
+
+        public void SetCanSelecting(bool val) {
+            this._canSelect = val;
+        }
+
+        public bool GetCanSelecting()
+        {
+            return this._canSelect;
+        }
+
+    }
+}
