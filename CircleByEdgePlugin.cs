@@ -152,7 +152,7 @@ namespace CircleByEdge
 
             //RegisterCommand((int)Commands.Create, "Создание звёзд", LoadIconResource("CreateStars"), LoadIconResource("CreateStars")); // Регистрируем команду создания
             //RegisterCommand((int)Commands.ShowWindow, "Показать окно", LoadIconResource("StarsWindow"), LoadIconResource("StarsWindow")); // Регистрируем команду показа окна
-            RegisterCommand((int)Commands.SplineCreate, "Создать окружность из кривой", LoadIconResource("CreateStars"), LoadIconResource("CreateStars")); // Регистрируем команду создания
+            RegisterCommand((int)Commands.SplineCreate, "Создать 3D объект", LoadIconResource("CreateStars"), LoadIconResource("CreateStars")); // Регистрируем команду создания
 
             //Регистрируем команды контекстного меню объекта звезды
             //RegisterObjectCommand((int)ObjectCommands.Fill, "Заливка", LoadIconResource("Fill"), LoadIconResource("Fill")); // Регистрируем команду заливки для контекстного меню
@@ -172,8 +172,8 @@ namespace CircleByEdge
 
             //Создаём панель с кнопками "Звёзды"
             int[] cmdIDs = new int[] { (int)Commands.SplineCreate };
-            CreateToolbar("Создание 3D", cmdIDs);
-            CreateMainBarPanel("Создание 3D", cmdIDs, this.ID, true);
+            CreateToolbar("Создание конуса", cmdIDs);
+            CreateMainBarPanel("Создание конуса", cmdIDs, this.ID, true);
 
             //Добавляем кнопки во вкладку "Приложения" в ленте
             TFlex.RibbonGroup ribbonGroup = TFlex.RibbonBar.ApplicationsTab.AddGroup("Создание 3D");
@@ -269,6 +269,12 @@ namespace CircleByEdge
         {
             args.AddFilter("Файлы звёзд (*.str)|*.str|", 1);
         }
+        /// Для внутреннего использования.
+		/// </summary>
+		/// <remarks>
+		/// Метод создаёт и устанавливает окно свойств
+		/// </remarks>
+       
 
     }
 }

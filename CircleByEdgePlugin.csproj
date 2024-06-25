@@ -138,8 +138,10 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CirclePropertiesWindow.cs" />
     <Compile Include="CreateSplineCommand.cs" />
     <Compile Include="CreateSplineCommandGeneral.cs" />
+    <Compile Include="ReferenceHolder.cs" />
     <Content Include="Macros.txt" />
     <Compile Include="CircleByEdgePlugin.cs">
       <SubType>Code</SubType>

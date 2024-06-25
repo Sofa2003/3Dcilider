@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml.Serialization;
 using TFlex;
 using TFlex.Command;
 using TFlex.Configuration;
@@ -11,11 +12,12 @@ using TFlex.Model;
 using TFlex.Model.Model2D;
 using TFlex.Model.Model3D;
 using TFlex.Model.Model3D.Geometry;
+using TFlex.Drawing;
 
 
 namespace CircleByEdge
 {
-    class CreateSplineCommandGeneral : PluginCommand
+    internal abstract class CreateSplineCommandGeneral : PluginCommand
     {
         private bool _canSelect = false;
         /// <summary>
@@ -36,11 +38,73 @@ namespace CircleByEdge
             //Выбор объекта
             this.Select += new SelectEventHandler(CreateCommand_Select);
         }
+        internal CreateSplineCommand CircleSpline { get; set; }
+        [XmlElement]
+        public double R1 { get; set; }
+        [XmlElement]
+        public double R2 { get; set; }
+        [XmlIgnore]
+        internal ReferenceHolder<Variable> VarR2;
+        [XmlIgnore]
+        internal ReferenceHolder<Variable> VarR1;
 
+        /// <summary>
+        /// Событие изменения состояния
+        /// </summary>
+        public event EventHandler InputStateChanged;
+        private InputState m_state;
+
+        public InputState State
+        {
+            get
+            {
+                return m_state;
+            }
+            set
+            {
+                TFlex.Application.ActiveMainWindow.StatusBar.Command = "Создание объекта";
+                if (m_state != value)
+                {
+                    m_state = value;
+                    switch (m_state)
+                    {
+
+                        case InputState.modeR1:
+                            TFlex.Application.ActiveMainWindow.StatusBar.Prompt = "Задайте первый радиус звезды";
+                            break;
+
+                        case InputState.modeR2:
+                            TFlex.Application.ActiveMainWindow.StatusBar.Prompt = "Задайте второй радиус звезды";
+                            break;
+
+                        default:
+                            TFlex.Application.ActiveMainWindow.StatusBar.Prompt = string.Empty;
+                            break;
+                    }
+                    InputStateChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+        }
         /// <summary>
         /// храним документ, для которого вызвана команда
         /// </summary>
         protected Document _document;
+        /// <summary>
+        /// Создаваемый объект 
+        /// </summary>
+        internal CreateSplineCommandGeneral Circle {  get; set; }
+        public enum InputState
+        {
+            modePoint,   //Ничего не выбрано
+            modeR1,      //Выбран центр (выбирается первый радиус)
+            modeR2,      //Выбран центр и радиус (выбирается второй радиус)
+            modeWait,    //Выбраны центр и оба радиуса, ожидаем подтверждения кнопкой "OK" или отката по нажатию правой кнопки мыши или кнопки "Cancel"
+        };
+
+        /// <summary>
+        /// Создаваемый объект звезды
+        /// </summary>
+
 
         /// <summary>
         /// Для внутреннего использования.
@@ -89,73 +153,6 @@ namespace CircleByEdge
 
             ex.Profile.Add(pr3D.Geometry.SheetContour);
         
-           
-
-
-
-            //FreeNode n1 = new FreeNode(_document, 0, 0);
-
-
-
-            //// Замыкаем контур линиями
-
-            //CircleConstruction circle = new CircleConstruction(_document);
-            //circle.SetCenterAndRadius(n1, 8.5);
-            ////CircleConstruction circle1 = new CircleConstruction(_document);
-            ////circle1.SetCenterAndRadius(n1, 13);
-
-
-
-            //// Создаем штриховку и ее контур
-            //Area ar1 = new Area(_document);
-            //TFlex.Model.Model2D.Contour cn = ar1.AppendContour();
-            ////Area ar2 = new Area(_document);
-            ////TFlex.Model.Model2D.Contour cn1 = ar2.AppendContour();
-            //// Описываем контур штриховки сегментами
-
-            //ConstructionContourSegment seg1 = new
-            //ConstructionContourSegment(cn);
-            //seg1.Construction = circle;
-
-            ////ConstructionContourSegment seg2 = new
-            ////ConstructionContourSegment(cn1);
-            ////seg2.Construction = circle1;
-
-
-
-
-
-
-            //// Создаем стандартную рабочую плоскость
-            //// Top - вид спереди, Front - вид спереди, Left - вид слева и др
-            //StandardWorkplane swp1 = new
-            //StandardWorkplane(_document, StandardWorkplane.StandardType.Top);
-
-            //StandardWorkplane swp2 = new
-            //StandardWorkplane(_document, StandardWorkplane.StandardType.Top);
-
-
-            //// Создаем 3D-профиль на основе штриховки и рабочей плоскости
-            //AreaProfile ap1 = new AreaProfile(_document);
-            ////ap1.Area = ar1;
-            //ap1.WorkSurface = swp1;
-
-            //AreaProfile ap2 = new AreaProfile(_document);
-            ////ap2.Area = ar2;
-            //ap2.WorkSurface = swp2;
-
-            //// Создаем операцию выталкивания
-            //ThickenExtrusion extr = new ThickenExtrusion(_document);
-
-            //// Длина выталкивания для первого направления
-            //extr.Thickness1 = 5;
-
-            //// Профиль для выталкивания
-            //extr.Profile.Add(ap2.Geometry.SheetContour);
-            //extr.Profile.Add(ap1.Geometry.SheetContour);
-
-
-
 
             _document.EndChanges();//Закрытие блока изменений документа
 
@@ -163,6 +160,7 @@ namespace CircleByEdge
 
             
         }
+        
                //MessageBox.Show(found is );
                     
 
@@ -197,6 +195,22 @@ namespace CircleByEdge
         {
             return this._canSelect;
         }
+        protected void CreatePropertiesWindow()
+        {
+            var propertiesWindow = new CirclePropertiesWindow(this, _document);
+
+            //Тип заголовка в окне свойств
+            propertiesWindow.PropertiesHeaderType = PropertiesWindow.HeaderType.OkPreviewCancel;
+
+            propertiesWindow.EnableHeaderButton(PropertiesWindowHeaderButton.OK, false);
+            propertiesWindow.EnableHeaderButton(PropertiesWindowHeaderButton.Preview, false);
+
+            this.PropertiesWindow = propertiesWindow;
+
+            //обработчик нажатий на клавиши проставляется в классах-наследниках
+        }
+       
+        
 
     }
 }

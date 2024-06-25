@@ -35,6 +35,6 @@ namespace CircleByEdge
             Console.WriteLine("Initialize");
             base.SetCanSelecting(true);
         }
-
+        
     }
 }
